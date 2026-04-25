@@ -194,6 +194,11 @@ export default function AddQuestion() {
         });
         if (!error && data?.found) {
           setLookupResults(data.results);
+          // Auto-select if very high confidence (> 0.95) and not already selected
+          const topMatch = data.results[0];
+          if (topMatch.score > 0.95 && form.problem_link !== topMatch.url) {
+            selectResult(topMatch, true);
+          }
         } else {
           setLookupResults([]);
         }
@@ -209,7 +214,7 @@ export default function AddQuestion() {
 
   const update = (k: keyof typeof form, v: string) => setForm({ ...form, [k]: v });
 
-  const selectResult = (res: any) => {
+  const selectResult = (res: any, silent = false) => {
     setForm((prev) => ({
       ...prev,
       problem_link: res.url,
@@ -221,7 +226,9 @@ export default function AddQuestion() {
     } else {
       setLeetcodeNumber(null);
     }
-    toast.success(`Selected ${res.platform}: ${res.title}`);
+    if (!silent) {
+      toast.success(`Selected ${res.platform}: ${res.title}`);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {

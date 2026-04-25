@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -103,11 +104,7 @@ export default function AddQuestion() {
   const [needsRevision, setNeedsRevision] = useState(false);
   const [isPublic, setIsPublic] = useState(false);
   const [lcLoading, setLcLoading] = useState(false);
-  const [lcResult, setLcResult] = useState<
-    | { found: true; questionNumber: string; title: string; url: string; difficulty: string }
-    | { found: false }
-    | null
-  >(null);
+  const [lookupResults, setLookupResults] = useState<any[]>([]);
   const [leetcodeNumber, setLeetcodeNumber] = useState<string | null>(null);
   const [duplicateInfo, setDuplicateInfo] = useState<{ id: string; title: string } | null>(null);
   const [checkingDuplicate, setCheckingDuplicate] = useState(false);
@@ -152,13 +149,6 @@ export default function AddQuestion() {
       setIsPublic(data.is_public ?? false);
       if (data.leetcode_number) {
         setLeetcodeNumber(data.leetcode_number);
-        setLcResult({
-          found: true,
-          questionNumber: data.leetcode_number,
-          title: data.title,
-          url: data.problem_link ?? "",
-          difficulty: data.difficulty,
-        });
       }
     });
   }, [id, editing]);
@@ -167,10 +157,12 @@ export default function AddQuestion() {
     const title = form.title.trim();
     if (title.length < 3) {
       setDuplicateInfo(null);
+      setLookupResults([]);
       return;
     }
 
     const timer = setTimeout(async () => {
+      // 1. Duplicate Check
       setCheckingDuplicate(true);
       try {
         let query = supabase
@@ -178,65 +170,58 @@ export default function AddQuestion() {
           .select("id, title")
           .eq("is_public", true);
 
-        const filters = [];
-        filters.push(`title.ilike."${title}"`);
+        const filters = [`title.ilike."${title}"`];
         if (form.problem_link) filters.push(`problem_link.eq."${form.problem_link.trim()}"`);
         if (leetcodeNumber) filters.push(`leetcode_number.eq."${leetcodeNumber.trim()}"`);
         
         query = query.or(filters.join(","));
-
-        if (editing) {
-          query = query.neq("id", id!);
-        }
+        if (editing) query = query.neq("id", id!);
 
         const { data, error } = await query.limit(1);
-
-        if (!error && data && data.length > 0) {
-          setDuplicateInfo(data[0]);
-          setIsPublic(false); // Auto-remove from public if duplicate detected
-        } else {
-          setDuplicateInfo(null);
-        }
+        setDuplicateInfo((!error && data && data.length > 0) ? data[0] : null);
+        if (!error && data && data.length > 0) setIsPublic(false);
       } catch (err) {
-        console.error("Real-time check failed:", err);
+        console.error("Duplicate check failed:", err);
       } finally {
         setCheckingDuplicate(false);
       }
-    }, 600);
+
+      // 2. Multi-Platform Lookup
+      setLcLoading(true);
+      try {
+        const { data, error } = await supabase.functions.invoke("problem-lookup", {
+          body: { title },
+        });
+        if (!error && data?.found) {
+          setLookupResults(data.results);
+        } else {
+          setLookupResults([]);
+        }
+      } catch (e) {
+        console.error("Lookup failed:", e);
+      } finally {
+        setLcLoading(false);
+      }
+    }, 800);
 
     return () => clearTimeout(timer);
   }, [form.title, form.problem_link, leetcodeNumber, id, editing]);
 
   const update = (k: keyof typeof form, v: string) => setForm({ ...form, [k]: v });
 
-  const lookupLeetCode = async () => {
-    const title = form.title.trim();
-    if (title.length < 2) {
-      toast.error("Enter a question title first");
-      return;
+  const selectResult = (res: any) => {
+    setForm((prev) => ({
+      ...prev,
+      problem_link: res.url,
+      platform: res.platform,
+      difficulty: res.difficulty as any,
+    }));
+    if (res.platform === "LeetCode" && res.questionNumber) {
+      setLeetcodeNumber(res.questionNumber);
+    } else {
+      setLeetcodeNumber(null);
     }
-    setLcLoading(true);
-    setLcResult(null);
-    try {
-      const { data, error } = await supabase.functions.invoke("leetcode-lookup", {
-        body: { title },
-      });
-      if (error) throw error;
-      if (data?.found) {
-        setLcResult(data);
-        setLeetcodeNumber(data.questionNumber);
-        setForm((prev) => ({ ...prev, problem_link: data.url, platform: "LeetCode" }));
-        toast.success(`Found: #${data.questionNumber} ${data.title}`);
-      } else {
-        setLcResult({ found: false });
-        setLeetcodeNumber(null);
-        toast.message("Not found on LeetCode");
-      }
-    } catch (e: any) {
-      toast.error(e?.message || "LeetCode lookup failed");
-    } finally {
-      setLcLoading(false);
-    }
+    toast.success(`Selected ${res.platform}: ${res.title}`);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -329,30 +314,43 @@ export default function AddQuestion() {
         {/* Basics */}
         <Card className="p-6 space-y-4 border-border bg-card">
           <h2 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground">Basics</h2>
-          <div className="space-y-2">
-            <Label htmlFor="title">Title *</Label>
-            <div className="flex gap-2">
-              <Input id="title" value={form.title} onChange={(e) => { update("title", e.target.value); setLcResult(null); setLeetcodeNumber(null); }} placeholder="Two Sum" required />
-              <Button type="button" variant="outline" onClick={lookupLeetCode} disabled={lcLoading} className="shrink-0">
-                {lcLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <><Search className="h-4 w-4 mr-1.5" /> Find on LeetCode</>}
-              </Button>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="title">Title *</Label>
+              <div className="relative">
+                <Input id="title" value={form.title} onChange={(e) => update("title", e.target.value)} placeholder="Two Sum" required className="pr-10" />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {lcLoading && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+                </div>
+              </div>
             </div>
-            {lcResult && lcResult.found && (
-              <div className="flex items-center gap-2 text-sm rounded-md border border-border bg-muted/40 px-3 py-2">
-                <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
-                <span className="font-mono text-xs px-1.5 py-0.5 rounded bg-primary/10 text-primary">#{lcResult.questionNumber}</span>
-                <span className="font-medium truncate">{lcResult.title}</span>
-                <a href={lcResult.url} target="_blank" rel="noopener noreferrer" className="ml-auto text-primary hover:underline inline-flex items-center gap-1 shrink-0">
-                  Open <ExternalLink className="h-3 w-3" />
-                </a>
+
+            {lookupResults.length > 0 && (
+              <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+                <p className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground ml-1">Auto-detected</p>
+                <div className="flex flex-wrap gap-2">
+                  {lookupResults.map((res, i) => (
+                    <Button 
+                      key={i} 
+                      type="button" 
+                      variant="outline" 
+                      onClick={() => selectResult(res)}
+                      className={`h-auto py-2 px-3 flex-col items-start gap-1 group transition-all hover:border-primary/50 ${form.problem_link === res.url ? "border-primary bg-primary/5" : ""}`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="secondary" className="text-[9px] px-1 h-3.5 uppercase bg-primary/10 text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-colors">{res.platform}</Badge>
+                        <span className="text-xs font-semibold max-w-[150px] truncate">{res.title}</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
+                        <span className="capitalize">{res.difficulty}</span>
+                        {res.questionNumber && <span className="opacity-60">#{res.questionNumber}</span>}
+                      </div>
+                    </Button>
+                  ))}
+                </div>
               </div>
             )}
-            {lcResult && !lcResult.found && (
-              <div className="flex items-center gap-2 text-sm rounded-md border border-border bg-muted/40 px-3 py-2 text-muted-foreground">
-                <XCircle className="h-4 w-4 shrink-0" />
-                <span>Not found in LeetCode</span>
-              </div>
-            )}
+
             {duplicateInfo && (
               <div className="flex items-center gap-2 text-sm rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2.5 text-destructive animate-in fade-in slide-in-from-top-1">
                 <XCircle className="h-4 w-4 shrink-0" />
@@ -396,13 +394,6 @@ export default function AddQuestion() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label>Platform</Label>
-              <Select value={form.platform} onValueChange={(v) => update("platform", v)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>{PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
               <Label htmlFor="link">Problem link</Label>
               <div className="flex gap-2">
                 <Input
@@ -410,7 +401,7 @@ export default function AddQuestion() {
                   type="url"
                   value={form.problem_link}
                   onChange={(e) => update("problem_link", e.target.value)}
-                  placeholder="https://leetcode.com/..."
+                  placeholder="https://..."
                   className={leetcodeNumber && form.problem_link ? "border-success/60 focus-visible:ring-success/40 bg-success/5" : ""}
                 />
                 {form.problem_link && (
@@ -421,9 +412,9 @@ export default function AddQuestion() {
                   </Button>
                 )}
               </div>
-              {leetcodeNumber && form.problem_link && (
+              {form.platform !== "Other" && form.problem_link && (
                 <p className="text-xs text-success flex items-center gap-1">
-                  <CheckCircle2 className="h-3 w-3" /> Auto-filled from LeetCode #{leetcodeNumber}
+                  <CheckCircle2 className="h-3 w-3" /> Linked to {form.platform} {leetcodeNumber ? `#${leetcodeNumber}` : ""}
                 </p>
               )}
             </div>

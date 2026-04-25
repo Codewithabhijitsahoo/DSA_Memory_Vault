@@ -79,7 +79,6 @@ export default function QuestionDetail() {
           <DifficultyBadge level={q.difficulty} />
           <StatusBadge status={q.status} />
           {q.topic && <Badge variant="secondary">{q.topic}</Badge>}
-          {q.platform && <Badge variant="outline">{q.platform}</Badge>}
           {q.leetcode_number && (
             q.problem_link ? (
               <a href={q.problem_link} target="_blank" rel="noopener noreferrer" className="inline-flex">

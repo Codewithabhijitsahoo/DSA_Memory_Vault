@@ -68,9 +68,10 @@ Revise Wise Zone is a feature-rich web application designed to help users track 
 - Uses Supabase Auth to manage user sessions.
 - `AuthProvider` wraps the application to provide user context.
 
-### 2. LeetCode Integration
-- An Edge Function (`supabase/functions/leetcode-lookup`) interacts with the LeetCode GraphQL API.
-- Allows users to search for questions by title and auto-fill details like difficulty and problem URL.
+### 2. Multi-Platform Integration
+- A unified Edge Function (`supabase/functions/problem-lookup`) interacts with various platform APIs (LeetCode GraphQL, Codeforces API, etc.).
+- Allows users to search for questions by title and auto-fill details across multiple coding sites simultaneously.
+- Uses algorithmic similarity scoring to suggest the best matches.
 
 ### 3. Study Tracking (Practice Tracker)
 - Tracks user practice counts for questions.

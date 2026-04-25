@@ -14,9 +14,10 @@ Revise Wise Zone is an advanced platform designed to streamline the Data Structu
 - **Integrated Code Editor**: A built-in Monaco Editor (VS Code core) to save and review your solutions in your preferred programming language.
 - **Smart Categorization**: Tag questions and filter them by difficulty, topic, or status (Solved, Pending, Revisit).
 
-### 3. LeetCode Integration 🚀
-- **Automated Lookup**: Simply enter a question title, and Revise Wise Zone will automatically fetch the difficulty, problem URL, and unique question ID directly from LeetCode using a serverless Edge Function.
-- **Syncing with Platforms**: Keep your internal tracker in sync with your LeetCode profile seamlessly.
+### 3. Multi-Platform Problem Lookup 🚀
+- **Automated Detection**: Simply enter a question title (e.g., "Two Sum" or "Watermelon"), and the system will automatically search multiple platforms like LeetCode and Codeforces.
+- **Smart Auto-fill**: Select a matching problem result to automatically fetch the difficulty, problem URL, and unique question ID directly into your tracker.
+- **Platform Agnostic**: While the system helps you find questions, the manual 'Platform' selection has been removed to keep your UI clean and focused on your progress.
 
 ### 4. Personal Mastery Notebook
 - **Categorized Notes**: Create structured notes for algorithms, design patterns, or specific data structures.

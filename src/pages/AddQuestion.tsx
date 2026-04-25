@@ -394,6 +394,13 @@ export default function AddQuestion() {
               </Select>
             </div>
             <div className="space-y-2">
+              <Label>Platform</Label>
+              <Select value={form.platform} onValueChange={(v) => update("platform", v)}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{PLATFORMS.map((p) => <SelectItem key={p} value={p}>{p}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="link">Problem link</Label>
               <div className="flex gap-2">
                 <Input
